@@ -50,11 +50,10 @@ def readSI7021():
 	
 	# SI7021 address, 0x40(64)
 	# Read data back, 2 bytes, Humidity MSB first
-	data0 = bus.read_byte(0x40)
-	data1 = bus.read_byte(0x40)
+	data = bus.read_word(0x40)
 	
 	# Convert the data
-	humidity = ((data0 * 256 + data1) * 125 / 65536.0) - 6
+	humidity = (data * 125 / 65536.0) - 6
 	
 	time.sleep(0.3)
 	
@@ -66,11 +65,10 @@ def readSI7021():
 	
 	# SI7021 address, 0x40(64)
 	# Read data back, 2 bytes, Temperature MSB first
-	data0 = bus.read_byte(0x40)
-	data1 = bus.read_byte(0x40)
+	data = bus.read_word(0x40)
 	
 	# Convert the data
-	cTemp = ((data0 * 256 + data1) * 175.72 / 65536.0) - 46.85
+	cTemp = (data * 175.72 / 65536.0) - 46.85
 	fTemp = cTemp * 1.8 + 32
 	
 
@@ -109,10 +107,13 @@ if __name__== "__main__":
 	topic_humidity = "v1/" + username + "/things/" + clientid + "/data/2"
 	
 
+	queryInterval = 5
+	reportInterval = 300
+	count = 0
 	while True:
 		try:
 			temperature, humidity = readSI7021()
-		except Excpetion as e:
+		except IOError as e:
 			logger.error("Error reading sensor")
 			logger.error(str(e))
 			mqttc.disconnect()
@@ -120,27 +121,34 @@ if __name__== "__main__":
 
 		logger.info("Temp = {: >5.2f}F Humidity = {: >2.0f}".format(temperature, humidity))
 
-		try:
+		if count == 0:
+			try:
 
-			temp = "temp,f=" + str(temperature)
-			mqttc.publish(topic_temp, payload=temp, retain=True)
+				temp = "temp,f=" + str(temperature)
+				mqttc.publish(topic_temp, payload=temp, retain=True)
 
-			humid = "rel_hum,p=" + str(humidity)
-			mqttc.publish(topic_humidity, payload=humidity, retain=True)
+				humid = "rel_hum,p=" + str(humidity)
+				mqttc.publish(topic_humidity, payload=humidity, retain=True)
 			
-		except (SystemExit, KeyboardInterrupt):
-			logger.info("Normal Exit")
-			mqttc.disconnect()
-			sys.exit()
+			except (SystemExit, KeyboardInterrupt):
+				logger.info("Normal Exit")
+				mqttc.disconnect()
+				sys.exit()
 	
-		except (EOFError):
-			logger.error("Lost MQTT Broker Link")
-			mqttc.disconnect()
-			sys.exit()
+			except (EOFError):
+				logger.error("Lost MQTT Broker Link")
+				mqttc.disconnect()
+				sys.exit()
 
-		except Excpetion as e:
-			logger.error(str(e))
-			mqttc.disconnect()
+			except IOError as e:
+				logger.error(str(e))
+				mqttc.disconnect()
+
+			print("sent info");
 	
 	
-		time.sleep(300)
+		time.sleep(queryInterval)
+		count = count + 1
+		if count >= (reportInterval / queryInterval):
+			count = 0
+	
