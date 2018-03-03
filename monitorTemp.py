@@ -4,6 +4,8 @@ import smbus
 import time
 import logging
 import sys
+import os
+import struct
 
 from logging import config
 
@@ -41,19 +43,31 @@ config.dictConfig(LOGGING)
 
 logger = logging.getLogger("my-logger")
 
+
+'''
+i2c foo
+
+Set the 12c bus addr
+Send the command
+wait for the reading to settle
+read 2 bytes that are big-endian
+'''
+def get_i2c_word(bus, addr, cmd):
+	bus._set_addr(addr)
+	buf = struct.pack('B', cmd)
+	os.write(bus._fd, buf)
+	time.sleep(0.3)
+	buf = os.read(bus._fd, 2)
+	data = struct.unpack('>H', buf)
+	return data[0]
+
 def readSI7021():
 	# SI7021 address, 0x40(64)
 	#		0xF5(245)	Select Relative Humidity NO HOLD master mode
-	bus.write_byte(0x40, 0xF5)
+	rawHumid = get_i2c_word(bus, 0x40, 0xF5)
 	
-	time.sleep(0.3)
 	
-	# SI7021 address, 0x40(64)
-	# Read data back, 2 bytes, Humidity MSB first
-	data = bus.read_word(0x40)
-	
-	# Convert the data
-	humidity = (data * 125 / 65536.0) - 6
+	humidity = (rawHumid * 125 / 65536.0) - 6
 	
 	time.sleep(0.3)
 	
@@ -65,10 +79,10 @@ def readSI7021():
 	
 	# SI7021 address, 0x40(64)
 	# Read data back, 2 bytes, Temperature MSB first
-	data = bus.read_word(0x40)
+	rawTemp = get_i2c_word(bus, 0x40, 0xF3)
 	
 	# Convert the data
-	cTemp = (data * 175.72 / 65536.0) - 46.85
+	cTemp = (rawTemp * 175.72 / 65536.0) - 46.85
 	fTemp = cTemp * 1.8 + 32
 	
 
@@ -83,7 +97,7 @@ if __name__== "__main__":
 
 	# so if starting at boot, wait for the wireless to come up
 	logger.info("Sleeping to wait for system up")
-	time.sleep(60)
+#	time.sleep(60)
 
 	# Get I2C bus
 	bus = smbus.SMBus(1)
@@ -119,7 +133,7 @@ if __name__== "__main__":
 			mqttc.disconnect()
 			sys.exit()
 
-		logger.info("Temp = {: >5.2f}F Humidity = {: >2.0f}".format(temperature, humidity))
+		logger.info("Temp = {: >5.2f}F Humidity = {: >2.2f}".format(temperature, humidity))
 
 		if count == 0:
 			try:
