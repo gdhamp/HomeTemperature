@@ -97,7 +97,7 @@ if __name__== "__main__":
 
 	# so if starting at boot, wait for the wireless to come up
 	logger.info("Sleeping to wait for system up")
-#	time.sleep(60)
+	time.sleep(60)
 
 	# Get I2C bus
 	bus = smbus.SMBus(1)
